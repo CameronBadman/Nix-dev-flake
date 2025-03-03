@@ -42,7 +42,9 @@
     homeManagerModuleBase = { pkgs, lib, config, ... }: {
       home = {
         username = "cameronbadman";
-        homeDirectory = "/Users/cameronbadman";
+        homeDirectory = 
+          if pkgs.stdenv.isDarwin then "/Users/cameronbadman"
+          else "/home/cameronbadman";
         stateVersion = "23.11";
         
         packages = with pkgs; [
@@ -74,7 +76,7 @@
         '';
       };
       
-      # Kitty configuration (largely unchanged)
+      # Kitty configuration
       programs.kitty = {
         enable = true;
         settings = {
@@ -144,7 +146,11 @@
     apps = forAllSystems (system: {
       default = {
         type = "app";
-        program = "${nixpkgs.legacyPackages.${system}.kitty}/bin/kitty";
+        program = "${
+          (nixpkgs.legacyPackages.${system}.callPackage ({ pkgs, writeShellScriptBin }:
+            writeShellScriptBin "kitty-with-config" ''
+              ${pkgs.kitty}/bin/kitty --config <(${pkgs.home-manager.packages.${system}.home-manager}/bin/home-manager generate-home-config ${toString (homeManagerModuleBase { inherit pkgs; })} | ${pkgs.jq}/bin/jq -r '.programs.kitty.settings | to_entries | map("\(.key) \(.value)") | .[]')
+            '') {})}/bin/kitty-with-config";
       };
     });
 
