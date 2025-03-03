@@ -4,46 +4,46 @@
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    
+    # Reference the local flakes
+    kitty-config = {
+      url = "path:./kitty";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    tmux-config = {
+      url = "path:./tmux";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    bash-config = {
+      url = "path:./bash";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
     home-manager = {
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
   };
 
-  outputs = { self, nixpkgs, flake-utils, home-manager, ... }:
+  outputs = { self, nixpkgs, flake-utils, kitty-config, tmux-config, bash-config, home-manager, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        
-        # Import the individual config flakes
-        kittyConfig = import ./kitty { 
-          inherit nixpkgs system pkgs;
-        };
-        
-        tmuxConfig = import ./tmux {
-          inherit nixpkgs system pkgs;
-        };
-        
-        bashConfig = import ./bash {
-          inherit nixpkgs system pkgs;
-        };
         
         # Create a combined install script that sets up all configs
         combinedInstallScript = pkgs.writeShellScriptBin "install-all-configs" ''
           echo "Installing all terminal configurations..."
           
           # Install Kitty config
-          mkdir -p ~/.config/kitty
-          cp ${kittyConfig.configFile}/kitty.conf ~/.config/kitty/
-          echo "✓ Kitty configuration installed to ~/.config/kitty/"
+          ${kitty-config.packages.${system}.default}/bin/install-kitty-config
           
           # Install Tmux config
-          cp ${tmuxConfig.configFile}/tmux.conf ~/.tmux.conf
-          echo "✓ Tmux configuration installed to ~/.tmux.conf"
+          ${tmux-config.packages.${system}.default}/bin/install-tmux-config
           
           # Install Bash config
-          cp ${bashConfig.configFile}/bashrc ~/.bashrc
-          echo "✓ Bash configuration installed to ~/.bashrc"
+          ${bash-config.packages.${system}.default}/bin/install-bash-config
           
           echo "All configurations installed successfully!"
           echo "You may need to restart your terminals for all changes to take effect."
@@ -52,9 +52,6 @@
       in {
         packages = {
           default = combinedInstallScript;
-          kitty = kittyConfig.configFile;
-          tmux = tmuxConfig.configFile;
-          bash = bashConfig.configFile;
           install-script = combinedInstallScript;
         };
         
@@ -86,17 +83,10 @@
         # Home Manager module that combines all configurations
         homeManagerModules.default = { config, lib, pkgs, ... }: {
           imports = [
-            kittyConfig.homeManagerModule
-            tmuxConfig.homeManagerModule
-            bashConfig.homeManagerModule
+            kitty-config.homeManagerModules.${system}.default
+            tmux-config.homeManagerModules.${system}.default
+            bash-config.homeManagerModules.${system}.default
           ];
-          
-          # Enable all components by default
-          programs = {
-            kitty.enable = lib.mkDefault true;
-            tmux.enable = lib.mkDefault true;
-            bash.enable = lib.mkDefault true;
-          };
         };
       }
     );
