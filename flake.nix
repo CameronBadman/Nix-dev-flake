@@ -22,7 +22,10 @@
     # Function to import nixpkgs with overlay for each system
     nixpkgsFor = forAllSystems (system: import nixpkgs {
       inherit system;
-      config = { allowUnfree = true; };
+      config = { 
+        allowUnfree = true; 
+        # Add any additional configurations if needed
+      };
     });
   in {
     # Provide default packages for each system
@@ -44,6 +47,7 @@
         program = "${self.packages.${system}.default}/bin/kitty";
       };
     });
+
     # Home Manager modules for each system
     homeManagerModules = forAllSystems (system: {
       default = { pkgs, lib, config, ... }: {
@@ -166,7 +170,7 @@
     # For Darwin systems specifically
     darwinModules = forAllSystems (system: {
       default = { ... }: {
-        # Nothing Darwin-specific for these tools
+        # Placeholder for any Darwin-specific configurations
       };
     });
   };
