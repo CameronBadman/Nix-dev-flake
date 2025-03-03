@@ -1,46 +1,59 @@
 {
-  description = "Minimal development environment with bash, kitty, and tmux";
+  description = "Cross-platform terminal configuration files for kitty and tmux";
 
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    
-    home-manager = {
-      url = "github:nix-community/home-manager";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
   };
 
-  outputs = { self, nixpkgs, home-manager, ... }@inputs: 
+  outputs = { self, nixpkgs }:
   let
-    # Supported systems
-    supportedSystems = [ "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
+    # Support multiple systems
+    supportedSystems = [ 
+      "x86_64-linux"   # 64-bit Intel/AMD Linux
+      "aarch64-linux"  # ARM Linux
+      "x86_64-darwin"  # Intel macOS
+      "aarch64-darwin" # Apple Silicon macOS
+    ];
     
-    # Helper function to generate systems
+    # Helper function to generate packages for each system
     forAllSystems = nixpkgs.lib.genAttrs supportedSystems;
   in {
-    # Home Manager modules for terminal applications
-    homeManagerModules = {
-      kitty = import ./modules/kitty.nix;
-      tmux = import ./modules/tmux.nix;
+    # Package for distributing config files
+    packages = forAllSystems (system: {
+      default = nixpkgs.legacyPackages.${system}.stdenvNoCC.mkDerivation {
+        name = "terminal-configs";
+        src = self;
+
+        installPhase = ''
+          mkdir -p $out
+          cp configs/* $out/
+        '';
+
+        meta = {
+          description = "Cross-platform terminal configuration files";
+          homepage = "https://github.com/CameronBadman/Nix-dev-flake";
+          license = nixpkgs.lib.licenses.mit;
+        };
+      };
+    });
+
+    # Optional: Modules for easy integration
+    nixosModules.default = { config, lib, pkgs, ... }: {
+      home-manager.users.${config.users.users.mainUser.name}.home.file = {
+        ".config/kitty/kitty.conf".source = 
+          "${self.packages.${pkgs.system}.default}/kitty.conf";
+        ".config/tmux/tmux.conf".source = 
+          "${self.packages.${pkgs.system}.default}/tmux.conf";
+      };
     };
 
-    # Optional: Provide packages if needed
-    packages = forAllSystems (system: {
-      default = nixpkgs.legacyPackages.${system}.symlinkJoin {
-        name = "terminal-environment";
-        paths = with nixpkgs.legacyPackages.${system}; [
-          kitty
-          tmux
-        ];
+    darwinModules.default = { config, lib, pkgs, ... }: {
+      home-manager.users.${config.users.users.mainUser.name}.home.file = {
+        ".config/kitty/kitty.conf".source = 
+          "${self.packages.${pkgs.system}.default}/kitty.conf";
+        ".config/tmux/tmux.conf".source = 
+          "${self.packages.${pkgs.system}.default}/tmux.conf";
       };
-    });
-
-    # Optional: Apps for running kitty
-    apps = forAllSystems (system: {
-      default = {
-        type = "app";
-        program = "${nixpkgs.legacyPackages.${system}.kitty}/bin/kitty";
-      };
-    });
+    };
   };
 }
