@@ -1,5 +1,5 @@
 {
-  description = "Bash configuration with fancy prompt";
+  description = "Bash configuration with simplified prompt";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -48,29 +48,8 @@
             alias ..='cd ..'
             alias ...='cd ../..'
             
-            # Fancy prompt
-            __prompt_command() {
-                local EXIT="$?"
-                local RCol='\[\e[0m\]'
-                local Red='\[\e[1;31m\]'
-                local Gre='\[\e[1;32m\]'
-                local Blu='\[\e[1;34m\]'
-                local Pur='\[\e[1;35m\]'
-                local Cya='\[\e[1;36m\]'
-                local Yel='\[\e[1;33m\]'
-                
-                PS1="\n"
-                
-                if [ $EXIT != 0 ]; then
-                    PS1+="$Red[\!]$RCol "
-                else
-                    PS1+="$Gre[\!]$RCol "
-                fi
-                
-                PS1+="$Blu[$Yel\u$RCol@$Pur\h$Blu:$Cya\w$Blu]$RCol\\$ "
-            }
-            
-            PROMPT_COMMAND=__prompt_command
+            # Ultra simple but functional colored prompt
+            export PS1='\n\[\e[32m\][\!\]\[\e[0m\] \[\e[34m\][\u@\h:\w]\[\e[0m\]$ '
             
             # Enable programmable completion
             if ! shopt -oq posix; then
@@ -105,15 +84,12 @@
         installScript = pkgs.writeShellScriptBin "install-bash-config" ''
           cp ${bashrcConfig}/bashrc ~/.bashrc
           echo "Bash configuration installed to ~/.bashrc"
-          
-          # Source it if bash is the current shell
-          if [[ $SHELL == *"bash"* ]]; then
-            source ~/.bashrc
-            echo "Configuration loaded in current shell"
-          else
-            echo "Note: You're not using bash as your current shell."
-            echo "To test this configuration, run: bash -l"
-          fi
+          echo ""
+          echo "To test this configuration, run:"
+          echo "  bash --rcfile ${bashrcConfig}/bashrc"
+          echo ""
+          echo "Or to install and load it in the current shell:"
+          echo "  cp ${bashrcConfig}/bashrc ~/.bashrc && source ~/.bashrc"
         '';
         
       in {
@@ -133,6 +109,9 @@
           shellHook = ''
             echo "Bash development shell activated"
             echo "Run 'install-bash-config' to install the configuration"
+            echo ""
+            echo "Or run the following to test directly:"
+            echo "  bash --rcfile ${bashrcConfig}/bashrc"
           '';
         };
         
@@ -153,29 +132,8 @@
             };
             
             initExtra = ''
-              # Fancy prompt
-              __prompt_command() {
-                  local EXIT="$?"
-                  local RCol='\[\e[0m\]'
-                  local Red='\[\e[1;31m\]'
-                  local Gre='\[\e[1;32m\]'
-                  local Blu='\[\e[1;34m\]'
-                  local Pur='\[\e[1;35m\]'
-                  local Cya='\[\e[1;36m\]'
-                  local Yel='\[\e[1;33m\]'
-                  
-                  PS1="\n"
-                  
-                  if [ $EXIT != 0 ]; then
-                      PS1+="$Red[\!]$RCol "
-                  else
-                      PS1+="$Gre[\!]$RCol "
-                  fi
-                  
-                  PS1+="$Blu[$Yel\u$RCol@$Pur\h$Blu:$Cya\w$Blu]$RCol\\$ "
-              }
-              
-              PROMPT_COMMAND=__prompt_command
+              # Ultra simple prompt with colors
+              export PS1='\n\[\e[32m\][\!\]\[\e[0m\] \[\e[34m\][\u@\h:\w]\[\e[0m\]$ '
             '';
           };
         };
