@@ -1,5 +1,5 @@
 {
-  description = "Bash configuration with simplified prompt";
+  description = "Bash configuration with plain text prompt";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -48,8 +48,8 @@
             alias ..='cd ..'
             alias ...='cd ../..'
             
-            # Ultra simple but functional colored prompt
-            export PS1='\n\[\e[32m\][\!\]\[\e[0m\] \[\e[34m\][\u@\h:\w]\[\e[0m\]$ '
+            # Plain text prompt - no colors, just structure
+            PS1="[\u@\h:\w]$ "
             
             # Enable programmable completion
             if ! shopt -oq posix; then
@@ -87,9 +87,6 @@
           echo ""
           echo "To test this configuration, run:"
           echo "  bash --rcfile ${bashrcConfig}/bashrc"
-          echo ""
-          echo "Or to install and load it in the current shell:"
-          echo "  cp ${bashrcConfig}/bashrc ~/.bashrc && source ~/.bashrc"
         '';
         
       in {
@@ -132,8 +129,8 @@
             };
             
             initExtra = ''
-              # Ultra simple prompt with colors
-              export PS1='\n\[\e[32m\][\!\]\[\e[0m\] \[\e[34m\][\u@\h:\w]\[\e[0m\]$ '
+              # Plain text prompt - no colors, just structure
+              PS1="[\u@\h:\w]$ "
             '';
           };
         };
