@@ -117,11 +117,16 @@
     ) // {
       # NixOS module
       nixosModules.default = { config, lib, pkgs, ... }: {
-        imports = [
-          home-manager.nixosModules.home-manager
-        ];
-        
-        config = {
+        options.terminal-environment = with lib; {
+          enable = mkEnableOption "Enable terminal environment";
+          user = mkOption {
+            type = types.str;
+            description = "The user to configure the terminal environment for";
+            default = "nixos";
+          };
+        };
+
+        config = lib.mkIf config.terminal-environment.enable {
           # Add your NixOS specific configurations here if needed
           environment.systemPackages = with pkgs; [
             kitty
@@ -130,9 +135,13 @@
           ];
           
           # Configure home-manager as a NixOS module
+          imports = [
+            home-manager.nixosModules.home-manager
+          ];
+          
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
-          home-manager.users.${config.users.users.primary.name} = {
+          home-manager.users.${config.terminal-environment.user} = { pkgs, ... }: {
             imports = [
               self.homeManagerModules.${pkgs.system}.default
             ];
@@ -142,11 +151,16 @@
       
       # Darwin module
       darwinModules.default = { config, lib, pkgs, ... }: {
-        imports = [
-          home-manager.darwinModules.home-manager
-        ];
-        
-        config = {
+        options.terminal-environment = with lib; {
+          enable = mkEnableOption "Enable terminal environment";
+          user = mkOption {
+            type = types.str;
+            description = "The user to configure the terminal environment for";
+            default = builtins.getEnv "USER";
+          };
+        };
+
+        config = lib.mkIf config.terminal-environment.enable {
           # Add your Darwin specific configurations here
           environment.systemPackages = with pkgs; [
             kitty
@@ -158,9 +172,13 @@
           programs.bash.enable = true;
           
           # Configure home-manager as a Darwin module
+          imports = [
+            home-manager.darwinModules.home-manager
+          ];
+          
           home-manager.useGlobalPkgs = true;
           home-manager.useUserPackages = true;
-          home-manager.users.${config.users.primaryUser.name} = {
+          home-manager.users.${config.terminal-environment.user} = { pkgs, ... }: {
             imports = [
               self.homeManagerModules.${pkgs.system}.default
             ];
