@@ -6,20 +6,9 @@
     flake-utils.url = "github:numtide/flake-utils";
     
     # Reference the local flakes
-    kitty-config = {
-      url = "path:./kitty";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    
-    tmux-config = {
-      url = "path:./tmux";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    
-    bash-config = {
-      url = "path:./bash";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
+    kitty-config.url = "path:./kitty";
+    tmux-config.url = "path:./tmux";
+    bash-config.url = "path:./bash";
     
     home-manager = {
       url = "github:nix-community/home-manager";
