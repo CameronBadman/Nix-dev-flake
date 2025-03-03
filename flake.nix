@@ -9,9 +9,15 @@
       url = "github:nix-community/home-manager";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    
+    # Optional: darwin support if needed
+    darwin = {
+      url = "github:LnL7/nix-darwin";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, home-manager, ... }@inputs:
+  outputs = { self, nixpkgs, home-manager, darwin, ... }@inputs:
   let
     # Define supported systems
     supportedSystems = [ "x86_64-linux" "aarch64-darwin" "x86_64-darwin" ];
@@ -24,7 +30,6 @@
       inherit system;
       config = { 
         allowUnfree = true; 
-        # Add any additional configurations if needed
       };
     });
   in {
@@ -51,11 +56,17 @@
     # Home Manager modules for each system
     homeManagerModules = forAllSystems (system: {
       default = { pkgs, lib, config, ... }: {
-        # Minimal set of packages for the focused environment
-        home.packages = with nixpkgsFor.${system}; [
-          # Only essential packages for this minimal setup
-          bash-completion
-        ];
+        # Explicitly set home directory
+        home = {
+          username = "cameronbadman";
+          homeDirectory = lib.mkDefault "/Users/cameronbadman";
+          
+          # Minimal set of packages for the focused environment
+          packages = with nixpkgsFor.${system}; [
+            # Only essential packages for this minimal setup
+            bash-completion
+          ];
+        };
         
         # Bash configuration
         programs.bash = {
@@ -167,11 +178,19 @@
       };
     });
     
-    # For Darwin systems specifically
-    darwinModules = forAllSystems (system: {
-      default = { ... }: {
-        # Placeholder for any Darwin-specific configurations
-      };
-    });
+    # Optional Darwin support
+    darwinConfigurations = forAllSystems (system: 
+      darwin.lib.darwinSystem {
+        inherit system;
+        modules = [
+          home-manager.darwinModules.home-manager
+          {
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.cameronbadman = self.homeManagerModules.${system}.default;
+          }
+        ];
+      }
+    );
   };
 }
