@@ -1,128 +1,101 @@
 {
-  description = "Kitty terminal configuration";
+  description = "Terminal environment configuration";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
     flake-utils.url = "github:numtide/flake-utils";
+    home-manager = {
+      url = "github:nix-community/home-manager";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
-  outputs = { self, nixpkgs, flake-utils }:
+  outputs = { self, nixpkgs, flake-utils, home-manager, ... }:
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
         
-        # Kitty configuration files
-        kittyConfig = pkgs.writeTextFile {
-          name = "kitty.conf";
-          text = ''
-            # Kitty terminal configuration
-            
-            # Font settings
-            font_family      JetBrains Mono
-            bold_font        auto
-            italic_font      auto
-            bold_italic_font auto
-            font_size 12.0
-            
-            # Window settings
-            remember_window_size  no
-            initial_window_width  1000
-            initial_window_height 650
-            window_padding_width 4
-            hide_window_decorations no
-            
-            # Tab settings
-            tab_bar_edge top
-            tab_bar_style separator
-            
-            # Kanagawa theme color scheme
-            background #1F1F28
-            foreground #DCD7BA
-            
-            # Black
-            color0 #090618
-            color8 #727169
-            
-            # Red
-            color1 #C34043
-            color9 #E82424
-            
-            # Green
-            color2  #76946A
-            color10 #98BB6C
-            
-            # Yellow
-            color3  #C0A36E
-            color11 #E6C384
-            
-            # Blue
-            color4  #7E9CD8
-            color12 #7FB4CA
-            
-            # Magenta
-            color5  #957FB8
-            color13 #938AA9
-            
-            # Cyan
-            color6  #6A9589
-            color14 #7AA89F
-            
-            # White
-            color7  #C8C093
-            color15 #DCD7BA
-            
-            # Keyboard shortcuts
-            map ctrl+shift+c copy_to_clipboard
-            map ctrl+shift+v paste_from_clipboard
-            map ctrl+shift+enter new_window
-            map ctrl+shift+t new_tab
-            map ctrl+shift+q close_tab
-            map ctrl+shift+right next_tab
-            map ctrl+shift+left previous_tab
-          '';
-          destination = "/kitty.conf";
+        # Import the individual config flakes
+        kittyConfig = import ./kitty { 
+          inherit nixpkgs system pkgs;
         };
         
-        # Create a shell script to install the config
-        installScript = pkgs.writeShellScriptBin "install-kitty-config" ''
+        tmuxConfig = import ./tmux {
+          inherit nixpkgs system pkgs;
+        };
+        
+        bashConfig = import ./bash {
+          inherit nixpkgs system pkgs;
+        };
+        
+        # Create a combined install script that sets up all configs
+        combinedInstallScript = pkgs.writeShellScriptBin "install-all-configs" ''
+          echo "Installing all terminal configurations..."
+          
+          # Install Kitty config
           mkdir -p ~/.config/kitty
-          cp ${kittyConfig}/kitty.conf ~/.config/kitty/
-          echo "Kitty configuration installed to ~/.config/kitty/"
+          cp ${kittyConfig.configFile}/kitty.conf ~/.config/kitty/
+          echo "✓ Kitty configuration installed to ~/.config/kitty/"
+          
+          # Install Tmux config
+          cp ${tmuxConfig.configFile}/tmux.conf ~/.tmux.conf
+          echo "✓ Tmux configuration installed to ~/.tmux.conf"
+          
+          # Install Bash config
+          cp ${bashConfig.configFile}/bashrc ~/.bashrc
+          echo "✓ Bash configuration installed to ~/.bashrc"
+          
+          echo "All configurations installed successfully!"
+          echo "You may need to restart your terminals for all changes to take effect."
         '';
         
       in {
         packages = {
-          default = installScript;
-          kittyConfig = kittyConfig;
+          default = combinedInstallScript;
+          kitty = kittyConfig.configFile;
+          tmux = tmuxConfig.configFile;
+          bash = bashConfig.configFile;
+          install-script = combinedInstallScript;
         };
         
-        # Development shell with kitty available
+        # A development shell with all tools available
         devShells.default = pkgs.mkShell {
           buildInputs = [
             pkgs.kitty
-            installScript
+            pkgs.tmux
+            pkgs.bash
+            pkgs.bashCompletion
+            combinedInstallScript
           ];
           
           shellHook = ''
-            echo "Kitty development shell activated"
-            echo "Run 'install-kitty-config' to install the configuration"
+            echo "════════════════════════════════════════════"
+            echo "    Terminal Environment Development Shell  "
+            echo "════════════════════════════════════════════"
+            echo "Available tools:"
+            echo "  - kitty: Terminal emulator"
+            echo "  - tmux: Terminal multiplexer"
+            echo "  - bash: Shell with custom configuration"
+            echo ""
+            echo "To install all configurations:"
+            echo "  install-all-configs"
+            echo ""
           '';
         };
         
-        # Home Manager module
-        # Can be used in your home.nix with: 
-        # imports = [ inputs.kitty-flake.homeManagerModules.default ];
+        # Home Manager module that combines all configurations
         homeManagerModules.default = { config, lib, pkgs, ... }: {
-          programs.kitty = {
-            enable = true;
-            settings = {
-              font_family = "JetBrains Mono";
-              font_size = "12.0";
-              background = "#1F1F28";
-              foreground = "#DCD7BA";
-              # Add more settings from kitty.conf here as needed
-            };
-            # You can also add keybindings and other configurations
+          imports = [
+            kittyConfig.homeManagerModule
+            tmuxConfig.homeManagerModule
+            bashConfig.homeManagerModule
+          ];
+          
+          # Enable all components by default
+          programs = {
+            kitty.enable = lib.mkDefault true;
+            tmux.enable = lib.mkDefault true;
+            bash.enable = lib.mkDefault true;
           };
         };
       }
