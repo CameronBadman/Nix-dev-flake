@@ -1,41 +1,24 @@
 {
-  description = "Darwin configuration with development environment";
-  
+  description = "Terminal environment configuration for both NixOS and Darwin";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    darwin.url = "github:lnl7/nix-darwin";
-    nvim-flake.url = "github:CameronBadman/Nvim-flake";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    flake-utils.url = "github:numtide/flake-utils";
     
-    # Terminal environment configuration
-    terminal-env.url = "github:CameronBadman/Nix-dev-flake";
-    
-    # Home Manager for user configurations
-    home-manager = {
-      url = "github:nix-community/home-manager";
+    # Reference the local flakes
+    kitty-config = {
+      url = "path:./kitty";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-  };
-  
-  outputs = { self, nixpkgs, darwin, nvim-flake, terminal-env, home-manager, ... }@inputs:
-  let 
-    system = "aarch64-darwin";
     
-    # Configure nixpkgs with allowUnfree enabled
-    pkgs = import nixpkgs {
-      inherit system;
-      config = {
-        allowUnfree = true;
-      };
+    tmux-config = {
+      url = "path:./tmux";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
-  in {
-    darwinConfigurations."camerons-MacBook-Air" = darwin.lib.darwinSystem {
-      inherit system{
-  description = "Darwin configuration with development environment";
-  
-  inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
-    darwin.url = "github:lnl7/nix-darwin";
-    nvim-flake.url = "github:CameronBadman/Nvim-flake";
+    
+    bash-config = {
+      url = "path:./bash";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
     
     home-manager = {
       url = "github:nix-community/home-manager";
@@ -43,90 +26,97 @@
     };
   };
   
-  outputs = { self, nixpkgs, darwin, nvim-flake, home-manager, ... }@inputs:
-  let 
-    system = "aarch64-darwin";
-    
-    # Configure nixpkgs with allowUnfree enabled
-    pkgs = import nixpkgs {
-      inherit system;
-      config = {
-        allowUnfree = true;
+  outputs = { self, nixpkgs, flake-utils, kitty-config, tmux-config, bash-config, home-manager, ... }:
+    let
+      # Systems that both NixOS and Darwin support
+      supportedSystems = [ "x86_64-linux" "aarch64-linux" "x86_64-darwin" "aarch64-darwin" ];
+    in flake-utils.lib.eachSystem supportedSystems (system:
+      let
+        pkgs = import nixpkgs { inherit system; };
+        
+        # Create a combined install script that sets up all configs
+        combinedInstallScript = pkgs.writeShellScriptBin "install-all-configs" ''
+          echo "Installing all terminal configurations..."
+          
+          # Install Kitty config
+          ${kitty-config.packages.${system}.default}/bin/install-kitty-config
+          
+          # Install Tmux config
+          ${tmux-config.packages.${system}.default}/bin/install-tmux-config
+          
+          # Install Bash config
+          ${bash-config.packages.${system}.default}/bin/install-bash-config
+          
+          echo "All configurations installed successfully!"
+          echo "You may need to restart your terminals for all changes to take effect."
+        '';
+        
+      in {
+        packages = {
+          default = combinedInstallScript;
+          install-script = combinedInstallScript;
+        };
+        
+        # A development shell with all tools available
+        devShells.default = pkgs.mkShell {
+          buildInputs = [
+            pkgs.kitty
+            pkgs.tmux
+            pkgs.bash
+            pkgs.bashCompletion
+            combinedInstallScript
+          ];
+          
+          shellHook = ''
+            echo "════════════════════════════════════════════"
+            echo "    Terminal Environment Development Shell  "
+            echo "════════════════════════════════════════════"
+            echo "Available tools:"
+            echo "  - kitty: Terminal emulator"
+            echo "  - tmux: Terminal multiplexer"
+            echo "  - bash: Shell with custom configuration"
+            echo ""
+            echo "To install all configurations:"
+            echo "  install-all-configs"
+            echo ""
+          '';
+        };
+        
+        # Home Manager module that combines all configurations
+        homeManagerModules.default = { config, lib, pkgs, ... }: {
+          imports = [
+            kitty-config.homeManagerModules.${system}.default
+            tmux-config.homeManagerModules.${system}.default
+            bash-config.homeManagerModules.${system}.default
+          ];
+        };
+      }
+    ) // {
+      # Platform-agnostic outputs
+      
+      # NixOS module
+      nixosModules.default = { config, lib, pkgs, ... }: {
+        imports = [ self.nixosModules.terminal-env ];
       };
-    };
-  in {
-    darwinConfigurations."camerons-MacBook-Air" = darwin.lib.darwinSystem {
-      inherit system;
-      specialArgs = { inherit inputs; };
-      modules = [
-        # Basic configuration
-        {
-          # Set the correct GID for nixbld
-          ids.gids.nixbld = 350;
-          
-          # Allow unfree packages
-          nixpkgs.config.allowUnfree = true;
-          
-          nix = {
-            enable = true;
-            settings = {
-              experimental-features = [ "nix-command" "flakes" ];
-            };
-          };
-          
-          # Enable zsh
-          programs.zsh.enable = true;
-          
-          # Configure tmux directly
-          programs.tmux = {
-            enable = true;
-            shortcut = "a";
-            extraConfig = ''
-              # Enable mouse mode
-              set -g mouse on
-              
-              # Set 256 color terminal
-              set -g default-terminal "screen-256color"
-              
-              # Start window numbering at 1
-              set -g base-index 1
-              
-              # Reload config with r
-              bind r source-file ~/.tmux.conf \; display "Config Reloaded!"
-              
-              # Split panes using | and -
-              bind | split-window -h
-              bind - split-window -v
-              unbind '"'
-              unbind %
-              
-              # Switch panes using Alt-arrow without prefix
-              bind -n M-Left select-pane -L
-              bind -n M-Right select-pane -R
-              bind -n M-Up select-pane -U
-              bind -n M-Down select-pane -D
-            '';
-          };
-          
-          # Shell configuration
-          environment.shellAliases = {
-            ls = "ls --color=auto";
-            ll = "ls -la";
-            ".." = "cd ..";
-            "..." = "cd ../..";
-            gs = "git status";
-            gl = "git log";
-            gp = "git pull";
-          };
-          
-          # Include development tools directly
+      
+      # Specific NixOS terminal environment module
+      nixosModules.terminal-env = { config, lib, pkgs, ... }: 
+      let 
+        cfg = config.terminal-environment;
+      in {
+        options.terminal-environment = with lib; {
+          enable = mkEnableOption "Enable terminal environment";
+        };
+        
+        config = lib.mkIf cfg.enable {
+          # System packages for the terminal environment
           environment.systemPackages = with pkgs; [
-            # Neovim from your flake
-            nvim-flake.packages.${system}.default
-            
-            # Terminal tools
             kitty
-            alacritty
+            tmux
+            bash
+            bashCompletion
+            
+            # Common utilities
             bat
             fzf
             ripgrep
@@ -134,221 +124,81 @@
             neofetch
             htop
             tree
-            
-            # Containers
-            docker
-            docker-compose
-            kubectl
-            
-            # Languages
-            python3
-            rustup
-            go
-            nodejs
-            dafny
-            dotnet-sdk
-            
-            # IDEs
-            vscode
-            
-            # Git
-            git
-            gh
-            gitAndTools.delta
-            diff-so-fancy
           ];
           
-          # System defaults
-          system.defaults = {
-            NSGlobalDomain = {
-              AppleKeyboardUIMode = 3;
-              InitialKeyRepeat = 10;
-              KeyRepeat = 1;
-            };
-            dock = {
-              autohide = true;
-              orientation = "bottom";
-            };
-          };
-          
-          # Setup system shell environment
-          environment.shellInit = ''
-            # Set up Neovim configuration if needed
-            if [ ! -d $HOME/.config/nvim ]; then
-              mkdir -p $HOME/.config/nvim
-            fi
-          '';
-          
-          system.stateVersion = 4;
-        }
+          # Home Manager module for user configuration
+          home-manager.sharedModules = [
+            ({ system, ... }: 
+              # Only import if the system is supported
+              if builtins.elem system supportedSystems then
+                self.homeManagerModules.${system}.default
+              else {}
+            )
+          ];
+        };
+      };
+      
+      # Darwin module
+      darwinModules.default = { config, lib, pkgs, ... }: {
+        imports = [ self.darwinModules.terminal-env ];
+      };
+      
+      # Specific Darwin terminal environment module
+      darwinModules.terminal-env = { config, lib, pkgs, ... }:
+      let 
+        cfg = config.terminal-environment;
+      in {
+        options.terminal-environment = with lib; {
+          enable = mkEnableOption "Enable terminal environment";
+        };
         
-        # Home Manager module for user-specific configuration
-        home-manager.darwinModules.home-manager {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.users.cameronbadman = { config, pkgs, ... }: {
-            # Kitty configuration
-            programs.kitty = {
-              enable = true;
-              settings = {
-                font_family = "JetBrainsMono Nerd Font";
-                font_size = 14;
-                scrollback_lines = 10000;
-                enable_audio_bell = false;
-                background_opacity = "0.95";
-                window_padding_width = 4;
-              };
-              theme = "Dracula";
-            };
-            
-            # Bash configuration 
-            programs.bash = {
-              enable = true;
-              shellAliases = {
-                ls = "ls --color=auto";
-                ll = "ls -la";
-                ".." = "cd ..";
-                "..." = "cd ../..";
-                gs = "git status";
-                gl = "git log";
-                gp = "git pull";
-              };
-              bashrcExtra = ''
-                # Improved prompt
-                export PS1="\[\033[01;32m\]\u@\h\[\033[00m\]:\[\033[01;34m\]\w\[\033[00m\]\$ "
-                
-                # History control
-                export HISTCONTROL=ignoreboth
-                export HISTSIZE=1000
-                export HISTFILESIZE=2000
-                
-                # Auto-CD
-                shopt -s autocd
-                
-                # Color support
-                if [ -x /usr/bin/dircolors ]; then
-                    test -r ~/.dircolors && eval "$(dircolors -b ~/.dircolors)" || eval "$(dircolors -b)"
-                fi
-              '';
-            };
-            
-            # Additional home-manager configurations
-            home.stateVersion = "23.11";
-          };
-        }
-      ];
-    };
-    
-    # Default package
-    packages.${system}.default = self.darwinConfigurations."camerons-MacBook-Air".system;
-  };
-};
-      specialArgs = { inherit inputs; };
-      modules = [
-        # Basic configuration
-        {
-          # Set the correct GID for nixbld
-          ids.gids.nixbld = 350;
-          
-          # Allow unfree packages
-          nixpkgs.config.allowUnfree = true;
-          
-          nix = {
-            enable = true;
-            settings = {
-              experimental-features = [ "nix-command" "flakes" ];
-            };
-          };
-          
-          # Enable zsh
-          programs.zsh.enable = true;
-          
-          # Include development tools directly
+        config = lib.mkIf cfg.enable {
+          # System packages for the terminal environment
           environment.systemPackages = with pkgs; [
-            # Neovim from your flake
-            nvim-flake.packages.${system}.default
-            
-            # Terminal tools - core packages for terminal environment
-            terminal-env.packages.${system}.default
             kitty
             tmux
+            bash
+            bashCompletion
             
-            # Additional terminal utilities
+            # Common utilities
             bat
             fzf
             ripgrep
             jq
-            
-            # Containers
-            docker
-            docker-compose
-            kubectl
-            
-            # Languages
-            python3
-            rustup
-            go
-            nodejs
-            dafny
-            dotnet-sdk
-            
-            # IDEs
-            vscode
-            
-            # Git
-            git
-            gh
+            neofetch
+            htop
+            tree
           ];
           
-          # System defaults
-          system.defaults = {
-            NSGlobalDomain = {
-              AppleKeyboardUIMode = 3;
-              InitialKeyRepeat = 10;
-              KeyRepeat = 1;
-            };
-            dock = {
-              autohide = true;
-              orientation = "bottom";
+          # Configure tmux directly for Darwin
+          programs.tmux.enable = true;
+          
+          # Home Manager module for user configuration
+          home-manager.sharedModules = [
+            ({ system, ... }: 
+              # Only import if the system is supported
+              if builtins.elem system supportedSystems then
+                self.homeManagerModules.${system}.default
+              else {}
+            )
+          ];
+        };
+      };
+      
+      # Home Manager module (system-agnostic)
+      homeManagerModules = builtins.listToAttrs (
+        map (system: {
+          name = system;
+          value = {
+            default = { ... }: {
+              imports = [
+                kitty-config.homeManagerModules.${system}.default
+                tmux-config.homeManagerModules.${system}.default
+                bash-config.homeManagerModules.${system}.default
+              ];
             };
           };
-          
-          # Setup system shell environment
-          environment.shellInit = ''
-            # Set up Neovim configuration if needed
-            if [ ! -d $HOME/.config/nvim ]; then
-              mkdir -p $HOME/.config/nvim
-            fi
-            
-            # Run terminal environment installation script if needed
-            if [ ! -f $HOME/.config/.terminal-env-installed ]; then
-              echo "Installing terminal environment configurations..."
-              ${terminal-env.packages.${system}.default}/bin/install-all-configs
-              touch $HOME/.config/.terminal-env-installed
-            fi
-          '';
-          
-          system.stateVersion = 4;
-        }
-        
-        # Home Manager module for user-specific configuration
-        home-manager.darwinModules.home-manager {
-          home-manager.useGlobalPkgs = true;
-          home-manager.useUserPackages = true;
-          home-manager.users.cameronbadman = { config, pkgs, ... }: {
-            # Import terminal environment Home Manager module
-            imports = [
-              terminal-env.homeManagerModules.${system}.default
-            ];
-            
-            # Additional home-manager configurations
-            home.stateVersion = "23.11";
-          };
-        }
-      ];
+        }) supportedSystems
+      );
     };
-    
-    # Default package
-    packages.${system}.default = self.darwinConfigurations."camerons-MacBook-Air".system;
-  };
 }
